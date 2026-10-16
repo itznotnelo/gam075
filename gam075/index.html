@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAM-075 Control</title>
+<style>
+  :root {
+    --bg: #0e0f12; --panel: #17191e; --line: #262a32; --text: #e8eaee; --muted: #8a909c;
+    --accent: #7c9cff; --key: #1f2229; --keytop: #262a33; --ok: #4ade80; --warn: #fbbf24; --err: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
+  header .status { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.busy { background: var(--warn); } .dot.err { background: var(--err); }
+  .warn { background: #3a2c0a; color: var(--warn); padding: 10px 24px; font-size: 13px; display: none; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .board-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; overflow-x: auto; }
+  .board { position: relative; margin: 0 auto; }
+  .k { position: absolute; border-radius: 7px; background: var(--key); border: 1px solid #000; cursor: pointer;
+       display: flex; align-items: flex-start; justify-content: flex-start; padding: 5px 7px; font-size: 12px; font-weight: 600;
+       color: var(--glow, #cfd3da); user-select: none; transition: transform .05s; }
+  .k::after { content: ""; position: absolute; inset: 3px 3px 6px 3px; border-radius: 5px; background: var(--keytop); z-index: -1; }
+  .k { z-index: 0; box-shadow: 0 0 14px -4px var(--glow, transparent) inset, 0 0 10px -3px var(--glow, transparent); }
+  .k:hover { outline: 1px solid var(--accent); }
+  .k.sel { outline: 2px solid var(--accent); }
+  .k .badge { position: absolute; right: 5px; bottom: 7px; font-size: 10px; color: var(--accent); font-weight: 600; }
+  .k.locked { cursor: not-allowed; opacity: .5; }
+  nav { display: flex; gap: 4px; margin: 22px 0 14px; }
+  nav button { background: none; border: 1px solid transparent; color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; }
+  nav button.on { background: var(--panel); border-color: var(--line); color: var(--text); }
+  section { display: none; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  section.on { display: block; }
+  .effects { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-bottom: 20px; }
+  .effects button, .btn { background: var(--key); border: 1px solid var(--line); color: var(--text); padding: 9px 10px; border-radius: 8px; cursor: pointer; font: inherit; }
+  .effects button.on { border-color: var(--accent); background: #1d2540; }
+  .btn.primary { background: var(--accent); color: #0b1020; border: 0; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  input[type=range] { width: 200px; accent-color: var(--accent); }
+  input[type=color] { width: 48px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: none; padding: 2px; cursor: pointer; }
+  select, input[type=text] { background: var(--key); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+  .swatches { display: flex; gap: 6px; }
+  .swatches span { width: 26px; height: 26px; border-radius: 6px; cursor: pointer; border: 1px solid #000; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .plist { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .plist div { display: flex; gap: 8px; align-items: center; }
+  .plist b { min-width: 160px; font-weight: 500; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2a1416; color: var(--err);
+           padding: 10px 16px; border-radius: 8px; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GAM-075 Control</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="stxt">Loading…</span></div>
+</header>
+<div class="warn" id="warn">The Deltaco app is still running. Close it, or it may overwrite your settings.</div>
+<main>
+  <div class="board-wrap"><div class="board" id="board"></div></div>
+
+  <nav>
+    <button data-tab="light" class="on">Lighting</button>
+    <button data-tab="paint">Paint keys</button>
+    <button data-tab="remap">Remap</button>
+    <button data-tab="prof">Profiles</button>
+    <button data-tab="auto">Auto-switch</button>
+    <button data-tab="set">Settings</button>
+  </nav>
+
+  <section id="light" class="on">
+    <div class="effects" id="effects"></div>
+    <div class="row" id="effectOpts">
+      <div class="field"><label>Colour</label>
+        <div class="row" style="gap:10px"><input type="color" id="eColor"><label style="color:var(--text)"><input type="checkbox" id="eRandom"> Rainbow</label></div></div>
+      <div class="field"><label>Brightness <span id="eBv"></span></label><input type="range" id="eBright" min="1" max="16"></div>
+      <div class="field"><label>Speed <span id="eSv"></span></label><input type="range" id="eSpeed" min="1" max="16"></div>
+      <div class="field"><label>Direction</label>
+        <select id="eDir"><option value="0">→ Right</option><option value="1">← Left</option><option value="2">↓ Down</option><option value="3">↑ Up</option></select></div>
+    </div>
+  </section>
+
+  <section id="paint">
+    <p class="hint">Pick a colour, then click or drag over keys. This switches the lighting to Custom.</p>
+    <div class="row">
+      <input type="color" id="pColor" value="#ff2d55">
+      <div class="swatches" id="swatches"></div>
+      <button class="btn" id="pFill">Fill all</button>
+      <button class="btn" id="pClear">All off</button>
+      <div class="field"><label>Brightness <span id="pBv"></span></label><input type="range" id="pBright" min="1" max="16"></div>
+    </div>
+  </section>
+
+  <section id="remap">
+    <p class="hint">Click a key, then choose what it should send. Saved on the keyboard itself, so it works on every PC.</p>
+    <div class="row">
+      <div class="field"><label>Selected key</label><b id="rKey">—</b></div>
+      <div class="field"><label>Sends</label><select id="rTarget" disabled></select></div>
+      <button class="btn" id="rReset">Reset all keys</button>
+    </div>
+  </section>
+
+  <section id="prof">
+    <p class="hint">Save the current lighting and remaps under a name, switch any time.</p>
+    <div class="row"><input type="text" id="pName" placeholder="e.g. Gaming"><button class="btn primary" id="pSave">Save current</button></div>
+    <div class="plist" id="plist"></div>
+  </section>
+  <section id="auto">
+    <p class="hint">When an app gets focus, its profile loads by itself. Each switch is one save on the keyboard, so only add apps you use for a while (games, editors).</p>
+    <div class="row">
+      <label><input type="checkbox" id="aOn"> Auto-switch on</label>
+      <div class="field"><label>Otherwise use</label><select id="aDefault"></select></div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <div class="field"><label>App</label><select id="aApp"></select></div>
+      <div class="field"><label>Profile</label><select id="aProf"></select></div>
+      <button class="btn primary" id="aAdd">Add rule</button>
+      <button class="btn" id="aRefresh">Refresh app list</button>
+    </div>
+    <div class="plist" id="rules"></div>
+  </section>
+
+  <section id="set">
+    <div class="row"><label><input type="checkbox" id="sAuto"> Start with Windows (tray icon, no window)</label></div>
+    <h3 style="font-size:14px;margin:22px 0 8px">Remote control (HQ, Home Assistant)</h3>
+    <p class="hint">Other devices on your network can flash the keyboard or switch profiles. Keep the token private.</p>
+    <div class="field" style="max-width:100%"><label>Notify URL</label><code id="sUrl" style="word-break:break-all;color:var(--accent)"></code></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="sTest">Test flash</button>
+      <button class="btn" id="sNewTok">New token</button>
+      <span class="hint" id="sWrites" style="margin:0"></span>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const U = 54; // px per key unit
+let S, KEYS, TARGETS, EFFECTS, tab = 'light', selKey = null, painting = false;
+const $ = id => document.getElementById(id);
+
+function status(kind, txt) { $('dot').className = 'dot ' + kind; $('stxt').textContent = txt; }
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 4000); }
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) } : {});
+  const j = await r.json();
+  if (j.ok === false) throw new Error(j.error);
+  return j;
+}
+
+let timers = {};
+function push(what) {
+  // debounce per block so slider drags send one write
+  status('busy', 'Saving to keyboard…');
+  clearTimeout(timers[what]);
+  timers[what] = setTimeout(async () => {
+    try { await api('/api/apply', { state: S, what: [what] }); status('ok', 'Saved on keyboard'); }
+    catch (e) { status('err', 'Keyboard error'); toast(e.message); }
+  }, 250);
+}
+
+const L = () => S.lighting;
+const curMode = () => L().modes[String(L().effect)];
+
+function keyColor(k) {
+  const l = L();
+  if (l.effect === 128) return l.keys[k[1]] || '#000000';
+  const m = curMode();
+  return m.random ? null : m.color;
+}
+
+function drawBoard() {
+  const b = $('board'); b.innerHTML = '';
+  b.style.width = 15 * U + 'px'; b.style.height = 5 * U + 'px';
+  KEYS.forEach(k => {
+    const [label, idx, x, y, w, h, hid] = k;
+    const d = document.createElement('div');
+    d.className = 'k'; d.textContent = label;
+    Object.assign(d.style, { left: x * U + 'px', top: y * U + 'px', width: w * U - 4 + 'px', height: h * U - 4 + 'px' });
+    let c = keyColor(k);
+    if (c === null) c = `hsl(${(x / 15) * 360} 90% 60%)`;
+    if (c && c !== '#000000') d.style.setProperty('--glow', c);
+    if (tab === 'remap') {
+      if (hid === null) d.classList.add('locked');
+      const t = S.remap[idx];
+      if (t) { const s = document.createElement('span'); s.className = 'badge'; s.textContent = '→ ' + tname(t); d.appendChild(s); }
+      if (selKey === idx) d.classList.add('sel');
+    }
+    d.onmousedown = e => { e.preventDefault(); onKey(k, true); };
+    d.onmouseenter = () => { if (painting) onKey(k, false); };
+    b.appendChild(d);
+  });
+}
+document.addEventListener('mouseup', () => { if (painting) { painting = false; push('lighting'); } });
+
+function tname(h) { const t = TARGETS.find(t => t[0] === h); return t ? t[1].split(' ')[0] : h; }
+
+function onKey(k, start) {
+  if (tab === 'paint') {
+    if (start) painting = true;
+    L().effect = 128; L().keys[k[1]] = $('pColor').value; drawBoard(); drawEffects();
+  } else if (tab === 'remap' && k[6] !== null) {
+    selKey = k[1]; $('rKey').textContent = k[0];
+    $('rTarget').disabled = false; $('rTarget').value = S.remap[k[1]] || 0; drawBoard();
+  }
+}
+
+function drawEffects() {
+  const e = $('effects'); e.innerHTML = '';
+  [...EFFECTS.map((n, i) => [i + 1, n]), [128, 'Custom']].forEach(([id, n]) => {
+    const b = document.createElement('button'); b.textContent = n;
+    if (L().effect === id) b.className = 'on';
+    b.onclick = () => { L().effect = id; drawEffects(); fillEffect(); drawBoard(); push('lighting'); };
+    e.appendChild(b);
+  });
+}
+
+function fillEffect() {
+  const custom = L().effect === 128;
+  $('effectOpts').style.display = custom ? 'none' : 'flex';
+  if (custom) return;
+  const m = curMode();
+  $('eColor').value = m.color; $('eRandom').checked = m.random; $('eColor').disabled = m.random;
+  $('eBright').value = m.brightness; $('eBv').textContent = m.brightness;
+  $('eSpeed').value = m.speed; $('eSv').textContent = m.speed; $('eDir').value = m.direction;
+}
+
+function bindEffect(id, key, conv, live) {
+  $(id).addEventListener(live ? 'input' : 'change', () => {
+    curMode()[key] = conv($(id)); fillEffect(); drawBoard(); push('lighting');
+  });
+}
+
+async function loadProfiles(list) {
+  const p = $('plist'); p.innerHTML = list.length ? '' : '<span class="hint">No profiles yet.</span>';
+  list.forEach(n => {
+    const row = document.createElement('div');
+    row.innerHTML = `<b></b><button class="btn">Load</button><button class="btn">Delete</button>`;
+    row.querySelector('b').textContent = n;
+    const [ld, del] = row.querySelectorAll('button');
+    ld.onclick = async () => {
+      status('busy', 'Loading profile…');
+      try { S = (await api('/api/profile/load', { name: n })).state; render(); status('ok', `Profile “${n}” active`); }
+      catch (e) { status('err', 'Keyboard error'); toast(e.message); }
+    };
+    del.onclick = async () => { await api('/api/profile/delete', { name: n }); refreshProfiles(); };
+    p.appendChild(row);
+  });
+}
+async function refreshProfiles() { const j = await api('/api/state'); PROFS = j.profiles; loadProfiles(PROFS); SET = j.settings; renderSettings(); }
+
+let SET = {}, LANIP = location.hostname;
+async function saveSettings(patch) {
+  try { SET = (await api('/api/settings', patch)).settings; renderSettings(); }
+  catch (e) { toast(e.message); }
+}
+function opts(sel, list, cur, empty) {
+  sel.innerHTML = (empty ? `<option value="">${empty}</option>` : '') + list.map(n => `<option>${n}</option>`).join('');
+  sel.value = cur || '';
+}
+let PROFS = [];
+function renderSettings() {
+  $('aOn').checked = SET.autoswitch; $('sAuto').checked = SET.autostart;
+  opts($('aDefault'), PROFS, SET.default_profile, 'Leave as is');
+  opts($('aProf'), PROFS, '', null);
+  const r = $('rules'); r.innerHTML = Object.keys(SET.rules).length ? '' : '<span class="hint">No rules yet.</span>';
+  Object.entries(SET.rules).forEach(([app, prof]) => {
+    const row = document.createElement('div');
+    row.innerHTML = '<b></b><span></span><button class="btn">Remove</button>';
+    row.querySelector('b').textContent = app; row.querySelector('span').textContent = '→ ' + prof;
+    row.querySelector('button').onclick = () => { const x = {...SET.rules}; delete x[app]; saveSettings({ rules: x }); };
+    r.appendChild(row);
+  });
+  $('sUrl').textContent = `http://${SET.lan_ip || 'YOUR-PC-IP'}:7075/api/ext/notify?token=${SET.token}&color=%2300aaff&seconds=5`;
+  const w = SET.writes || {}; $('sWrites').textContent = `Keyboard saves today: ${w.count || 0} (notifications ${w.notifies || 0}/60)`;
+}
+async function refreshApps() { opts($('aApp'), (await api('/api/apps')).apps, '', null); }
+
+function render() { drawBoard(); drawEffects(); fillEffect(); $('pBright').value = L().custom_brightness; $('pBv').textContent = L().custom_brightness; }
+
+async function init() {
+  const j = await api('/api/state');
+  S = j.state; KEYS = j.keys; TARGETS = j.targets; EFFECTS = j.effects;
+  $('warn').style.display = j.deltaco ? 'block' : 'none';
+  $('rTarget').innerHTML = '<option value="0">Default (no change)</option>' +
+    TARGETS.map(([h, n]) => `<option value="${h}">${n}</option>`).join('');
+  ['#ff2d55', '#ff9500', '#ffd60a', '#30d158', '#64d2ff', '#0a84ff', '#bf5af2', '#ffffff'].forEach(c => {
+    const s = document.createElement('span'); s.style.background = c; s.onclick = () => $('pColor').value = c; $('swatches').appendChild(s);
+  });
+  loadProfiles(j.profiles); PROFS = j.profiles; SET = j.settings; renderSettings(); refreshApps();
+  render(); status('ok', 'Connected');
+}
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === b.dataset.tab));
+  tab = b.dataset.tab; selKey = null; drawBoard();
+});
+
+bindEffect('eColor', 'color', el => el.value, false);
+bindEffect('eRandom', 'random', el => el.checked, false);
+bindEffect('eBright', 'brightness', el => +el.value, true);
+bindEffect('eSpeed', 'speed', el => +el.value, true);
+bindEffect('eDir', 'direction', el => +el.value, false);
+
+$('pBright').oninput = () => { L().custom_brightness = +$('pBright').value; $('pBv').textContent = $('pBright').value; push('lighting'); };
+$('pFill').onclick = () => { L().effect = 128; KEYS.forEach(k => L().keys[k[1]] = $('pColor').value); render(); push('lighting'); };
+$('pClear').onclick = () => { L().effect = 128; KEYS.forEach(k => L().keys[k[1]] = '#000000'); render(); push('lighting'); };
+
+$('rTarget').onchange = () => {
+  const v = +$('rTarget').value;
+  if (v) S.remap[selKey] = v; else delete S.remap[selKey];
+  drawBoard(); push('remap');
+};
+$('rReset').onclick = () => { S.remap = {}; drawBoard(); push('remap'); };
+
+$('pSave').onclick = async () => {
+  const n = $('pName').value.trim().replace(/[^\w \-]/g, '');
+  if (!n) return;
+  await api('/api/profile/save', { name: n, state: S }); $('pName').value = ''; refreshProfiles();
+};
+
+$('aOn').onchange = () => saveSettings({ autoswitch: $('aOn').checked });
+$('aDefault').onchange = () => saveSettings({ default_profile: $('aDefault').value });
+$('aAdd').onclick = () => { const a = $('aApp').value, p = $('aProf').value; if (a && p) saveSettings({ rules: { ...SET.rules, [a]: p } }); };
+$('aRefresh').onclick = refreshApps;
+$('sAuto').onchange = () => saveSettings({ autostart: $('sAuto').checked });
+$('sNewTok').onclick = () => saveSettings({ new_token: true });
+$('sTest').onclick = async () => {
+  const r = await api('/api/test-notify', { color: '#00aaff' });
+  status(r.result === 'ok' ? 'ok' : 'busy', r.result === 'ok' ? 'Flashing for 4 s…' : 'Notify: ' + r.result);
+  setTimeout(refreshProfiles, 5000);
+};
+
+init().catch(e => { status('err', 'Cannot reach keyboard'); toast(e.message); });
+</script>
+</body>
+</html>

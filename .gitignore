@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+*.log
+# reverse-engineering scratch (captures, vendor files, photos)
+re/
