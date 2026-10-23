@@ -25,6 +25,7 @@ PROFILES = DATA / 'profiles'
 
 NOTIFY_MIN_GAP = 20      # seconds between two external notifications
 NOTIFY_DAILY_CAP = 60    # each notification = 2 flash writes
+CLAUDE_FLASH = {'needs_you': ('#ff9500', 20), 'done': ('#30d158', 4)}  # colour, seconds
 
 DEFAULT_SETTINGS = {
     'autoswitch': False,
@@ -32,6 +33,7 @@ DEFAULT_SETTINGS = {
     'default_profile': '',    # used when no rule matches ('' = leave as is)
     'token': '',
     'writes': {'day': '', 'count': 0, 'notifies': 0},
+    'claude': {'needs_you': True, 'done': False},  # Claude Code events that flash the board
 }
 
 
@@ -56,6 +58,7 @@ class Engine:
         self.active_profile = ''
         self.last_notify = 0.0
         self.notify_timer = None
+        self.claude_flash = False  # the running notification came from Claude Code
         s = _read(SETTINGS, {})
         self.settings = {**DEFAULT_SETTINGS, **s}
         if not self.settings['token']:
@@ -154,11 +157,28 @@ class Engine:
             self._cancel_notify()
             self._write_blocks(tmp, ('lighting',))
             self._count(0, notify=True)
+            self.claude_flash = False
             seconds = max(2, min(int(seconds), 120))
             self.notify_timer = threading.Timer(seconds, self._restore)
             self.notify_timer.daemon = True
             self.notify_timer.start()
             return 'ok'
+
+    def claude(self, event):
+        """Claude Code hook (~/.claude/hooks/claude-modes.py): needs_you / done flash
+        the board if switched on in Settings; clear ends a Claude flash early (the
+        restore write happens anyway, so this costs nothing extra)."""
+        with self.lock:
+            if event == 'clear':
+                if self.notify_timer and self.claude_flash:
+                    self._cancel_notify()
+                    self._restore()
+                return 'ok'
+            if event not in CLAUDE_FLASH or not self.settings['claude'].get(event):
+                return 'off'
+            r = self.notify(*CLAUDE_FLASH[event])
+            self.claude_flash = r == 'ok'
+            return r
 
     def _restore(self):
         with self.lock:

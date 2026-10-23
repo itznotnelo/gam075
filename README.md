@@ -9,6 +9,8 @@ myself by watching what the Deltaco app sends, so this is unofficial and comes
 with no warranty. It has only been tested on my own keyboard (60%, Swiss German
 ISO layout).
 
+![GAM-075 Control: lighting tab with the keyboard preview](docs/screenshot.png)
+
 ## Features
 
 - Lighting effects, colors and brightness, written straight to the keyboard
@@ -18,6 +20,8 @@ ISO layout).
 - Optional start with Windows
 - LAN API with a token, so other tools (Home Assistant, a home server) can
   flash the keyboard as a notification
+- Optional Claude Code hint: a local `POST /api/claude` (needs_you, done, clear)
+  flashes the keys orange while Claude waits for you and green when it's done
 
 ## Requirements
 

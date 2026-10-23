@@ -134,6 +134,12 @@
       <button class="btn" id="sNewTok">New token</button>
       <span class="hint" id="sWrites" style="margin:0"></span>
     </div>
+    <h3 style="font-size:14px;margin:22px 0 8px">Claude Code</h3>
+    <p class="hint">The board lights up when Claude needs you (orange, ends as soon as you answer) or when it finishes (green). Each flash counts as a notification.</p>
+    <div class="row">
+      <label><input type="checkbox" id="cNeeds"> Needs you</label>
+      <label><input type="checkbox" id="cDone"> Done</label>
+    </div>
   </section>
 </main>
 <div class="toast" id="toast"></div>
@@ -278,6 +284,7 @@ function renderSettings() {
   });
   $('sUrl').textContent = `http://${SET.lan_ip || 'YOUR-PC-IP'}:7075/api/ext/notify?token=${SET.token}&color=%2300aaff&seconds=5`;
   const w = SET.writes || {}; $('sWrites').textContent = `Keyboard saves today: ${w.count || 0} (notifications ${w.notifies || 0}/60)`;
+  $('cNeeds').checked = SET.claude.needs_you; $('cDone').checked = SET.claude.done;
 }
 async function refreshApps() { opts($('aApp'), (await api('/api/apps')).apps, '', null); }
 
@@ -331,6 +338,8 @@ $('aAdd').onclick = () => { const a = $('aApp').value, p = $('aProf').value; if 
 $('aRefresh').onclick = refreshApps;
 $('sAuto').onchange = () => saveSettings({ autostart: $('sAuto').checked });
 $('sNewTok').onclick = () => saveSettings({ new_token: true });
+$('cNeeds').onchange = () => saveSettings({ claude: { ...SET.claude, needs_you: $('cNeeds').checked } });
+$('cDone').onchange = () => saveSettings({ claude: { ...SET.claude, done: $('cDone').checked } });
 $('sTest').onclick = async () => {
   const r = await api('/api/test-notify', { color: '#00aaff' });
   status(r.result === 'ok' ? 'ok' : 'busy', r.result === 'ok' ? 'Flashing for 4 s…' : 'Notify: ' + r.result);

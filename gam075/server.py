@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             engine.delete_profile(req['name'])
             self._json({'ok': True})
         elif path == '/api/settings':
-            for k in ('autoswitch', 'rules', 'default_profile'):
+            for k in ('autoswitch', 'rules', 'default_profile', 'claude'):
                 if k in req:
                     engine.settings[k] = req[k]
             if req.get('new_token'):
@@ -140,6 +140,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({'ok': True, 'settings': public_settings()})
         elif path == '/api/test-notify':
             self._json({'ok': True, 'result': engine.notify(req.get('color', '#ff0000'), 4)})
+        elif path == '/api/claude':
+            self._json({'ok': True, 'result': engine.claude(req.get('event', ''))})
         else:
             self.send_error(404)
 
