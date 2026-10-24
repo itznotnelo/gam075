@@ -48,6 +48,13 @@ The UI and `/api/*` only answer requests from `127.0.0.1`. Calls from other
 machines go to `/api/ext/*` and need the token shown in Settings, sent as an
 `X-Token` header or a `token` query parameter.
 
+- `status`: active profile, profiles, dark flag, writes today
+- `notify?color=#ff0000&seconds=5`: flash the whole board, then restore
+- `profile?name=...`: switch to a saved profile
+- `dark?on=1` / `dark?on=0`: turn the board black and back. I use this with a
+  Home Assistant automation on the smart plug at my desk. While it is dark,
+  notifications are skipped and profile changes are saved for later.
+
 ## How the protocol works
 
 Everything goes through 64-byte HID feature reports on interface 0. A write
