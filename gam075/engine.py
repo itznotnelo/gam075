@@ -34,6 +34,7 @@ DEFAULT_SETTINGS = {
     'token': '',
     'writes': {'day': '', 'count': 0, 'notifies': 0},
     'claude': {'needs_you': True, 'done': False},  # Claude Code events that flash the board
+    'dark': False,            # desk smart plug is off (Home Assistant), board stays black
 }
 
 
@@ -121,6 +122,8 @@ class Engine:
         """Write state to the keyboard and make it the saved state."""
         with self.lock:
             self._cancel_notify()
+            if self.settings['dark']:   # saved now, shown when the plug comes back on
+                what = tuple(w for w in what if w != 'lighting')
             self._write_blocks(state, what)
             _write(STATE, state)
             if profile is not None:
@@ -142,6 +145,8 @@ class Engine:
     def notify(self, color='#ff0000', seconds=5, effect='breath'):
         """Light the whole board in one colour for a few seconds, then restore."""
         with self.lock:
+            if self.settings['dark']:
+                return 'dark'
             w = self.settings['writes']
             if w['day'] == date.today().isoformat() and w['notifies'] >= NOTIFY_DAILY_CAP:
                 return 'daily limit reached'
@@ -183,7 +188,28 @@ class Engine:
     def _restore(self):
         with self.lock:
             self.notify_timer = None
-            self._write_blocks(self.state(), ('lighting',))
+            self._write_blocks(self._dark_state() if self.settings['dark'] else self.state(), ('lighting',))
+
+    # ---- dark (owner 2026-10-25): Home Assistant turns the board black with the desk plug ----
+    def _dark_state(self):
+        """Static black: brightness runs 1..16, so 'off' is a black colour, not level 0."""
+        tmp = json.loads(json.dumps(self.state()))
+        tmp['lighting']['modes']['1'].update(color='#000000', random=False, brightness=1)
+        tmp['lighting']['effect'] = 1
+        return tmp
+
+    def set_dark(self, on):
+        """Lights-on always rewrites the saved state: after an app restart the board can
+        still be black from the last dark write while this session's cache is empty."""
+        with self.lock:
+            on = bool(on)
+            if on and self.settings['dark']:
+                return 'unchanged'
+            self._cancel_notify()
+            self.settings['dark'] = on
+            self.save_settings()
+            self._write_blocks(self._dark_state() if on else self.state(), ('lighting',))
+            return 'dark' if on else 'lit'
 
 
 engine = Engine()

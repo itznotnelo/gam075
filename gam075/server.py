@@ -151,6 +151,7 @@ class Handler(BaseHTTPRequestHandler):
         if what == 'status':
             return self._json({'ok': True, 'profile': engine.active_profile,
                                'profiles': engine.profiles(),
+                               'dark': engine.settings['dark'],
                                'writes_today': engine.settings['writes']})
         if what == 'notify':
             r = engine.notify(req.get('color', '#ff0000'), req.get('seconds', 5),
@@ -159,6 +160,9 @@ class Handler(BaseHTTPRequestHandler):
         if what == 'profile':
             engine.apply_profile(req['name'])
             return self._json({'ok': True})
+        if what == 'dark':   # Home Assistant: desk smart plug off -> on=1, back on -> on=0
+            on = str(req.get('on', '1')).lower() in ('1', 'true', 'on', 'yes')
+            return self._json({'ok': True, 'result': engine.set_dark(on)})
         self.send_error(404)
 
 
